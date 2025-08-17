@@ -1,0 +1,37 @@
+export type GLContext = {
+  gl: WebGLRenderingContext;
+  canvas: HTMLCanvasElement;
+};
+
+export function initWebGLCanvas(canvasId: string = "glcanvas"): GLContext {
+  const canvas = document.getElementById(canvasId) as HTMLCanvasElement | null;
+  if (!canvas) {
+    throw new Error(`Canvas with id "${canvasId}" not found`);
+  }
+
+  const gl =
+    canvas.getContext("webgl") ||
+    (canvas.getContext("experimental-webgl") as WebGLRenderingContext | null);
+
+  if (!gl) {
+    throw new Error("WebGL not supported by this browser");
+  }
+
+  return { gl, canvas };
+}
+
+export function resizeCanvasToDisplaySize(
+  canvas: HTMLCanvasElement,
+  devicePixelRatio: number = window.devicePixelRatio || 1
+): boolean {
+  const displayWidth = Math.floor(canvas.clientWidth * devicePixelRatio);
+  const displayHeight = Math.floor(canvas.clientHeight * devicePixelRatio);
+
+  if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
+    canvas.width = displayWidth;
+    canvas.height = displayHeight;
+    return true;
+  }
+
+  return false;
+}
