@@ -3,6 +3,10 @@ export type GLContext = {
   canvas: HTMLCanvasElement;
 };
 
+/**
+ * Creates and returns a WebGL rendering context from a canvas element.
+ * Throws if the canvas cannot be found or WebGL is unavailable.
+ */
 export function initWebGLCanvas(canvasId: string = "glcanvas"): GLContext {
   const canvas = document.getElementById(canvasId) as HTMLCanvasElement | null;
   if (!canvas) {
@@ -20,6 +24,11 @@ export function initWebGLCanvas(canvasId: string = "glcanvas"): GLContext {
   return { gl, canvas };
 }
 
+/**
+ * Resizes the canvas' internal pixel size to match its CSS display size,
+ * accounting for devicePixelRatio (for HiDPI/retina crispness).
+ * Returns true if a resize occurred. Call this each frame before drawing.
+ */
 export function resizeCanvasToDisplaySize(
   canvas: HTMLCanvasElement,
   devicePixelRatio: number = window.devicePixelRatio || 1
