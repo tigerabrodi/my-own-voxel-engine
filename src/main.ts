@@ -8,7 +8,7 @@ import { CHUNK_SIZE } from "./world/types";
  * The goal here is only to establish a stable frame lifecycle and a clear color.
  */
 function main() {
-  const { gl, canvas } = initWebGLCanvas("glcanvas");
+  const { gl, canvas } = initWebGLCanvas({ canvasId: "glcanvas" });
 
   // Terrain generation sanity test: fill a chunk with a height-based SDF
   const testChunk = new Chunk({ chunkX: 0, chunkY: 0, chunkZ: 0 });
@@ -22,7 +22,7 @@ function main() {
     gain: 0.5,
   };
 
-  fillChunkHeights(testChunk, terrainParams);
+  fillChunkHeights({ chunk: testChunk, params: terrainParams });
   const center = Math.floor(CHUNK_SIZE / 2);
   console.log(
     "Center density after terrain fill:",
@@ -30,7 +30,7 @@ function main() {
   );
 
   function render() {
-    const resized = resizeCanvasToDisplaySize(canvas);
+    const resized = resizeCanvasToDisplaySize({ canvas });
     if (resized) {
       // Ensure the GL viewport matches the actual canvas pixel size.
       // Without this, content can look stretched or clipped after resizes/zoom.

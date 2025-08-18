@@ -10,11 +10,15 @@ export type WorldToChunkResult = {
 };
 
 // Converts world-space voxel coordinates to chunk coordinates and local coords in [0, CHUNK_SIZE)
-export function worldToChunk(
-  x: number,
-  y: number,
-  z: number
-): WorldToChunkResult {
+export function worldToChunk({
+  x,
+  y,
+  z,
+}: {
+  x: number;
+  y: number;
+  z: number;
+}): WorldToChunkResult {
   const cx = Math.floor(x / CHUNK_SIZE);
   const cy = Math.floor(y / CHUNK_SIZE);
   const cz = Math.floor(z / CHUNK_SIZE);
@@ -27,14 +31,21 @@ export function worldToChunk(
 }
 
 // Converts chunk coordinates + local coords back to world-space voxel coordinates
-export function chunkToWorld(
-  chunkX: number,
-  chunkY: number,
-  chunkZ: number,
-  localX: number,
-  localY: number,
-  localZ: number
-): { x: number; y: number; z: number } {
+export function chunkToWorld({
+  chunkX,
+  chunkY,
+  chunkZ,
+  localX,
+  localY,
+  localZ,
+}: {
+  chunkX: number;
+  chunkY: number;
+  chunkZ: number;
+  localX: number;
+  localY: number;
+  localZ: number;
+}): { x: number; y: number; z: number } {
   return {
     x: chunkX * CHUNK_SIZE + localX,
     y: chunkY * CHUNK_SIZE + localY,

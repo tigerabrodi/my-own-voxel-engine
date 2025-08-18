@@ -16,7 +16,15 @@ function smoothstep(t: number): number {
 }
 
 // Bilinear interpolated value noise at (x, z) with given seed
-export function valueNoise2D(x: number, z: number, seed: number): number {
+export function valueNoise2D({
+  x,
+  z,
+  seed,
+}: {
+  x: number;
+  z: number;
+  seed: number;
+}): number {
   const x0 = Math.floor(x);
   const z0 = Math.floor(z);
   const x1 = x0 + 1;
@@ -38,21 +46,32 @@ export function valueNoise2D(x: number, z: number, seed: number): number {
   return v * 2 - 1;
 }
 
-export function fbm2D(
-  x: number,
-  z: number,
-  seed: number,
-  octaves: number,
-  lacunarity: number,
-  gain: number
-): number {
+export function fbm2D({
+  x,
+  z,
+  seed,
+  octaves,
+  lacunarity,
+  gain,
+}: {
+  x: number;
+  z: number;
+  seed: number;
+  octaves: number;
+  lacunarity: number;
+  gain: number;
+}): number {
   let amplitude = 1.0;
   let frequency = 1.0;
   let sum = 0.0;
   let ampSum = 0.0;
 
   for (let i = 0; i < octaves; i++) {
-    const n = valueNoise2D(x * frequency, z * frequency, seed + i * 1013);
+    const n = valueNoise2D({
+      x: x * frequency,
+      z: z * frequency,
+      seed: seed + i * 1013,
+    });
     sum += n * amplitude;
     ampSum += amplitude;
     frequency *= lacunarity;
