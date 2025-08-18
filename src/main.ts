@@ -1,6 +1,6 @@
 import { initWebGLCanvas, resizeCanvasToDisplaySize } from "./webgl/context";
 import { Chunk } from "./world/chunk";
-import { fillChunkHeights, TerrainParams } from "./world/terrain";
+import { fillChunkHeights, type TerrainParams } from "./world/terrain";
 import { CHUNK_SIZE } from "./world/types";
 
 /**
