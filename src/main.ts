@@ -1,5 +1,6 @@
 import { initWebGLCanvas, resizeCanvasToDisplaySize } from "./webgl/context";
 import { Chunk } from "./world/chunk";
+import { fillChunkHeights, TerrainParams } from "./world/terrain";
 import { CHUNK_SIZE } from "./world/types";
 
 /**
@@ -9,12 +10,22 @@ import { CHUNK_SIZE } from "./world/types";
 function main() {
   const { gl, canvas } = initWebGLCanvas("glcanvas");
 
-  // Quick sanity test for chunk indexing and set/get behavior
+  // Terrain generation sanity test: fill a chunk with a height-based SDF
   const testChunk = new Chunk({ chunkX: 0, chunkY: 0, chunkZ: 0 });
+  const terrainParams: TerrainParams = {
+    seed: 1337,
+    worldScale: 0.02, // lower = larger features
+    amplitude: 12,
+    baseHeight: 8,
+    octaves: 4,
+    lacunarity: 2.0,
+    gain: 0.5,
+  };
+
+  fillChunkHeights(testChunk, terrainParams);
   const center = Math.floor(CHUNK_SIZE / 2);
-  testChunk.setDensity(center, center, center, -1.0);
   console.log(
-    "Chunk center density:",
+    "Center density after terrain fill:",
     testChunk.getDensity(center, center, center)
   );
 
