@@ -1,10 +1,16 @@
 import { createFlyControls } from "./camera/flyControls";
 import { polygonizeChunk } from "./rendering/marchingCubes";
-import { identity4, multiply4, perspective } from "./webgl/camera";
+import {
+  identity4,
+  multiply4,
+  perspective,
+  translation4,
+} from "./webgl/camera";
 import { initWebGLCanvas, resizeCanvasToDisplaySize } from "./webgl/context";
 import { bindMeshAttributes, createMesh } from "./webgl/mesh";
 import { createLambertProgram } from "./webgl/programs";
 import { Chunk } from "./world/chunk";
+import { createChunkManager } from "./world/chunkManager";
 import { fillChunkHeights, type TerrainParams } from "./world/terrain";
 import { CHUNK_SIZE } from "./world/types";
 
@@ -49,6 +55,9 @@ function main() {
   const vaoExt = gl.getExtension("OES_vertex_array_object");
   const glMesh = createMesh({ gl, ext: vaoExt, mesh: meshData });
 
+  // 3b) Chunk manager for multi-chunk rendering
+  const chunkManager = createChunkManager({ terrain: terrainParams });
+
   let lastTime = performance.now();
   const controls = createFlyControls({
     canvas,
@@ -87,6 +96,13 @@ function main() {
       far: 1000,
     });
     controls.update({ dt });
+    const camPos = controls.getPosition();
+    chunkManager.update({
+      centerX: camPos[0],
+      centerY: camPos[1],
+      centerZ: camPos[2],
+      radius: 2,
+    });
     const view = controls.getViewMatrix();
     const model = identity4();
     const mvp = multiply4({ a: proj, b: multiply4({ a: view, b: model }) });
@@ -101,9 +117,23 @@ function main() {
     gl.uniform3f(u_lightDir, -0.5, 1.0, 0.3);
     gl.uniform3f(u_ambient, 0.2, 0.22, 0.25);
 
-    // 5) Bind attributes and draw
-    bindMeshAttributes({ gl, ext: vaoExt, mesh: glMesh, program });
-    gl.drawElements(gl.TRIANGLES, glMesh.indexCount, gl.UNSIGNED_SHORT, 0);
+    // 5) Draw all loaded chunks using the same mesh geometry, with per-chunk translation
+    for (const [key] of chunkManager.getLoaded()) {
+      const [cx, cy, cz] = key.split(",").map(Number);
+      const modelT = translation4({
+        x: cx * CHUNK_SIZE,
+        y: cy * CHUNK_SIZE,
+        z: cz * CHUNK_SIZE,
+      });
+      const mvpChunk = multiply4({
+        a: proj,
+        b: multiply4({ a: view, b: modelT }),
+      });
+      gl.uniformMatrix4fv(u_mvp, false, mvpChunk);
+      gl.uniformMatrix4fv(u_model, false, modelT);
+      bindMeshAttributes({ gl, ext: vaoExt, mesh: glMesh, program });
+      gl.drawElements(gl.TRIANGLES, glMesh.indexCount, gl.UNSIGNED_SHORT, 0);
+    }
 
     requestAnimationFrame(render);
   }

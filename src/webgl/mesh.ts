@@ -9,6 +9,7 @@ export type GLMesh = {
   nbo: WebGLBuffer | null;
   ebo: WebGLBuffer | null;
   indexCount: number;
+  model?: Float32Array; // optional per-instance model matrix
 };
 
 /**

@@ -8,6 +8,23 @@ export function identity4(): Mat4 {
   return m;
 }
 
+/** Creates a translation matrix. */
+export function translation4({
+  x,
+  y,
+  z,
+}: {
+  x: number;
+  y: number;
+  z: number;
+}): Mat4 {
+  const m = identity4();
+  m[12] = x;
+  m[13] = y;
+  m[14] = z;
+  return m;
+}
+
 /**
  * Perspective projection matrix.
  * Why: Projects 3D to clip space with a vertical FOV and aspect ratio.
