@@ -1,16 +1,21 @@
+import { polygonizeChunk } from "./rendering/marchingCubes";
+import { identity4, lookAt, multiply4, perspective } from "./webgl/camera";
 import { initWebGLCanvas, resizeCanvasToDisplaySize } from "./webgl/context";
+import { bindMeshAttributes, createMesh } from "./webgl/mesh";
+import { createLambertProgram } from "./webgl/programs";
 import { Chunk } from "./world/chunk";
 import { fillChunkHeights, type TerrainParams } from "./world/terrain";
 import { CHUNK_SIZE } from "./world/types";
 
 /**
- * Entry point: initializes WebGL and runs a minimal render loop.
- * The goal here is only to establish a stable frame lifecycle and a clear color.
+ * Entry point: set up WebGL, generate one chunk of terrain, polygonize with
+ * Marching Cubes, upload mesh to GPU, and render with a simple lit shader.
+ * Why: Completes Step 4 — rendering a single chunk.
  */
 function main() {
   const { gl, canvas } = initWebGLCanvas({ canvasId: "glcanvas" });
 
-  // Terrain generation sanity test: fill a chunk with a height-based SDF
+  // 1) Generate terrain densities for a single chunk
   const testChunk = new Chunk({ chunkX: 0, chunkY: 0, chunkZ: 0 });
   const terrainParams: TerrainParams = {
     seed: 1337,
@@ -28,6 +33,20 @@ function main() {
     "Center density after terrain fill:",
     testChunk.getDensity(center, center, center)
   );
+
+  // 2) Marching Cubes: convert densities → triangle mesh
+  const meshData = polygonizeChunk({ chunk: testChunk, isoLevel: 0 });
+  console.log(
+    "Mesh vertex count:",
+    meshData.positions.length / 3,
+    "triangles:",
+    meshData.indices.length / 3
+  );
+
+  // 3) Create GL program and upload mesh buffers
+  const program = createLambertProgram({ gl });
+  const vaoExt = gl.getExtension("OES_vertex_array_object");
+  const glMesh = createMesh({ gl, ext: vaoExt, mesh: meshData });
 
   function render() {
     const resized = resizeCanvasToDisplaySize({ canvas });
@@ -47,6 +66,36 @@ function main() {
     // (used for correct 3D occlusion). Clearing depth each frame avoids
     // leftover depth values from previous frames affecting current rendering.
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    // 4) Camera + matrices (static for now — camera controls in Step 5)
+    const aspect = canvas.width / canvas.height;
+    const proj = perspective({
+      fovyRad: Math.PI / 3,
+      aspect,
+      near: 0.1,
+      far: 1000,
+    });
+    const view = lookAt({
+      eye: [24, 24, 48],
+      center: [8, 8, 8],
+      up: [0, 1, 0],
+    });
+    const model = identity4();
+    const mvp = multiply4({ a: proj, b: multiply4({ a: view, b: model }) });
+
+    gl.useProgram(program);
+    const u_mvp = gl.getUniformLocation(program, "u_mvp");
+    const u_model = gl.getUniformLocation(program, "u_model");
+    const u_lightDir = gl.getUniformLocation(program, "u_lightDir");
+    const u_ambient = gl.getUniformLocation(program, "u_ambient");
+    gl.uniformMatrix4fv(u_mvp, false, mvp);
+    gl.uniformMatrix4fv(u_model, false, model);
+    gl.uniform3f(u_lightDir, -0.5, 1.0, 0.3);
+    gl.uniform3f(u_ambient, 0.2, 0.22, 0.25);
+
+    // 5) Bind attributes and draw
+    bindMeshAttributes({ gl, ext: vaoExt, mesh: glMesh, program });
+    gl.drawElements(gl.TRIANGLES, glMesh.indexCount, gl.UNSIGNED_SHORT, 0);
 
     requestAnimationFrame(render);
   }
