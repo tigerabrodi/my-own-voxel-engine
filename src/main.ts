@@ -1,5 +1,6 @@
+import { createFlyControls } from "./camera/flyControls";
 import { polygonizeChunk } from "./rendering/marchingCubes";
-import { identity4, lookAt, multiply4, perspective } from "./webgl/camera";
+import { identity4, multiply4, perspective } from "./webgl/camera";
 import { initWebGLCanvas, resizeCanvasToDisplaySize } from "./webgl/context";
 import { bindMeshAttributes, createMesh } from "./webgl/mesh";
 import { createLambertProgram } from "./webgl/programs";
@@ -48,7 +49,17 @@ function main() {
   const vaoExt = gl.getExtension("OES_vertex_array_object");
   const glMesh = createMesh({ gl, ext: vaoExt, mesh: meshData });
 
+  let lastTime = performance.now();
+  const controls = createFlyControls({
+    canvas,
+    position: [24, 24, 48],
+    target: [8, 8, 8],
+  });
+
   function render() {
+    const now = performance.now();
+    const dt = Math.min(0.05, (now - lastTime) / 1000);
+    lastTime = now;
     const resized = resizeCanvasToDisplaySize({ canvas });
     if (resized) {
       // Ensure the GL viewport matches the actual canvas pixel size.
@@ -67,7 +78,7 @@ function main() {
     // leftover depth values from previous frames affecting current rendering.
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    // 4) Camera + matrices (static for now — camera controls in Step 5)
+    // 4) Camera + matrices (now driven by fly controls)
     const aspect = canvas.width / canvas.height;
     const proj = perspective({
       fovyRad: Math.PI / 3,
@@ -75,11 +86,8 @@ function main() {
       near: 0.1,
       far: 1000,
     });
-    const view = lookAt({
-      eye: [24, 24, 48],
-      center: [8, 8, 8],
-      up: [0, 1, 0],
-    });
+    controls.update({ dt });
+    const view = controls.getViewMatrix();
     const model = identity4();
     const mvp = multiply4({ a: proj, b: multiply4({ a: view, b: model }) });
 
