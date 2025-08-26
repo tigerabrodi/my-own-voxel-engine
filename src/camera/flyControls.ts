@@ -60,10 +60,11 @@ export function createFlyControls({
   }
 
   function rightVec(f: [number, number, number]): [number, number, number] {
-    // right = normalize(cross(up, forward)) with up = (0,1,0)
-    const rx = 1 * f[2] - 0 * f[1]; // up x forward
-    const ry = 0 * f[0] - 0 * f[2];
-    const rz = 0 * f[1] - 1 * f[0];
+    // right = normalize(cross(forward, up)) with up = (0,1,0)
+    // Note: previously used up x forward which yielded the LEFT vector
+    const rx = -f[2];
+    const ry = 0;
+    const rz = f[0];
     const len = Math.hypot(rx, ry, rz) || 1;
     return [rx / len, ry / len, rz / len];
   }
