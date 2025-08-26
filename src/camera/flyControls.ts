@@ -75,7 +75,7 @@ export function createFlyControls({
 
   function onMouseMove(e: MouseEvent) {
     if (document.pointerLockElement !== canvas) return;
-    yawRad += e.movementX * mouseSensitivity;
+    yawRad -= e.movementX * mouseSensitivity;
     pitchRad = clampPitch(pitchRad - e.movementY * mouseSensitivity);
   }
 
