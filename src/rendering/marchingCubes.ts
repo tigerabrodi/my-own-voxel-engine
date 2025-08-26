@@ -46,6 +46,27 @@ export function polygonizeChunk({
 
   // Temporary storage for the 12 possible edge vertices per cell
   const edgeVertices: Vec3[] = new Array(12);
+  const edgeNormals: Vec3[] = new Array(12);
+
+  // Helper: gradient at integer lattice coordinate using central differences
+  function gradientAt(ix: number, iy: number, iz: number): Vec3 {
+    // Clamp to valid range so sampling at borders remains defined
+    const xm = Math.max(0, ix - 1),
+      xp = Math.min(CHUNK_SIZE - 1, ix + 1);
+    const ym = Math.max(0, iy - 1),
+      yp = Math.min(CHUNK_SIZE - 1, iy + 1);
+    const zm = Math.max(0, iz - 1),
+      zp = Math.min(CHUNK_SIZE - 1, iz + 1);
+    const ddx = chunk.getDensity(xp, iy, iz) - chunk.getDensity(xm, iy, iz);
+    const ddy = chunk.getDensity(ix, yp, iz) - chunk.getDensity(ix, ym, iz);
+    const ddz = chunk.getDensity(ix, iy, zp) - chunk.getDensity(ix, iy, zm);
+    // Negative gradient points from inside to outside for our SDF convention
+    let nx = -ddx * 0.5,
+      ny = -ddy * 0.5,
+      nz = -ddz * 0.5;
+    const len = Math.hypot(nx, ny, nz) || 1;
+    return [nx / len, ny / len, nz / len];
+  }
 
   // Iterate over 15 cells along each axis (since 16 samples define 15 cells)
   for (let z = 0; z < CHUNK_SIZE - 1; z++) {
@@ -91,13 +112,34 @@ export function polygonizeChunk({
         for (let e = 0; e < 12; e++) {
           if (edgeMask & (1 << e)) {
             const [c0, c1] = EDGE_VERTEX_INDICES[e];
-            edgeVertices[e] = interpolateVertex({
+            // Interpolate position along the edge
+            const p = interpolateVertex({
               p0: cornerPositions[c0],
               p1: cornerPositions[c1],
               v0: d[c0],
               v1: d[c1],
               isoLevel,
             });
+            edgeVertices[e] = p;
+
+            // Interpolate normals by blending gradients at the edge's corners
+            const g0 = gradientAt(
+              cornerPositions[c0][0],
+              cornerPositions[c0][1],
+              cornerPositions[c0][2]
+            );
+            const g1 = gradientAt(
+              cornerPositions[c1][0],
+              cornerPositions[c1][1],
+              cornerPositions[c1][2]
+            );
+            const denom = d[c1] - d[c0];
+            const t = denom !== 0 ? (isoLevel - d[c0]) / denom : 0.5;
+            const nx = g0[0] + (g1[0] - g0[0]) * t;
+            const ny = g0[1] + (g1[1] - g0[1]) * t;
+            const nz = g0[2] + (g1[2] - g0[2]) * t;
+            const nlen = Math.hypot(nx, ny, nz) || 1;
+            edgeNormals[e] = [nx / nlen, ny / nlen, nz / nlen];
           }
         }
 
@@ -111,22 +153,20 @@ export function polygonizeChunk({
 
           positions.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
 
-          // Flat normal from triangle (temporary; gradient normals can be added later)
-          const ux = b[0] - a[0];
-          const uy = b[1] - a[1];
-          const uz = b[2] - a[2];
-          const vx = c[0] - a[0];
-          const vy = c[1] - a[1];
-          const vz = c[2] - a[2];
-          const nx = uy * vz - uz * vy;
-          const ny = uz * vx - ux * vz;
-          const nz = ux * vy - uy * vx;
-          const len = Math.hypot(nx, ny, nz) || 1;
-          const invLen = 1 / len;
-          const nxn = nx * invLen;
-          const nyn = ny * invLen;
-          const nzn = nz * invLen;
-          normals.push(nxn, nyn, nzn, nxn, nyn, nzn, nxn, nyn, nzn);
+          const na = edgeNormals[triEdges[t + 0]];
+          const nb = edgeNormals[triEdges[t + 1]];
+          const nc = edgeNormals[triEdges[t + 2]];
+          normals.push(
+            na[0],
+            na[1],
+            na[2],
+            nb[0],
+            nb[1],
+            nb[2],
+            nc[0],
+            nc[1],
+            nc[2]
+          );
 
           indices.push(baseIndex, baseIndex + 1, baseIndex + 2);
         }
