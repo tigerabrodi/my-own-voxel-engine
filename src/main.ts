@@ -3,6 +3,7 @@ import { runDensityCompute } from "./gpu/compute";
 import { initWebGPU, resizeCanvasToDisplaySize } from "./gpu/context";
 import { createLambertPipeline } from "./gpu/lambert";
 import { createGPUMesh, type GPUMesh } from "./gpu/mesh";
+import { aabbInFrustum, extractFrustumPlanes } from "./math/frustum";
 import { multiply4, perspective, translation4 } from "./math/mat4";
 import { type TerrainParams } from "./world/terrain";
 import { CHUNK_SIZE } from "./world/types";
@@ -25,9 +26,9 @@ async function main() {
   // Terrain
   const terrain: TerrainParams = {
     seed: 1337,
-    worldScale: 0.02,
-    amplitude: 12,
-    baseHeight: 8,
+    worldScale: 0.017,
+    amplitude: 24,
+    baseHeight: 11,
     octaves: 4,
     lacunarity: 2.0,
     gain: 0.5,
@@ -133,6 +134,8 @@ async function main() {
       far: 1000,
     });
     const view = controls.getViewMatrix();
+    const pv = multiply4({ a: proj, b: view });
+    const planes = extractFrustumPlanes(pv);
 
     const encoder = device.createCommandEncoder();
     const colorView = context.getCurrentTexture().createView();
@@ -158,17 +161,25 @@ async function main() {
 
     // Draw preloaded grid
     for (const rec of gridMeshes) {
-      const model = translation4({
-        x: rec.cx * CHUNK_SIZE,
-        y: rec.cy * CHUNK_SIZE,
-        z: rec.cz * CHUNK_SIZE,
-      });
+      const min: [number, number, number] = [
+        rec.cx * CHUNK_SIZE,
+        rec.cy * CHUNK_SIZE,
+        rec.cz * CHUNK_SIZE,
+      ];
+      const max: [number, number, number] = [
+        min[0] + CHUNK_SIZE,
+        min[1] + CHUNK_SIZE,
+        min[2] + CHUNK_SIZE,
+      ];
+      if (!aabbInFrustum(planes, min, max)) continue;
+
+      const model = translation4({ x: min[0], y: min[1], z: min[2] });
       const mvp = multiply4({ a: proj, b: multiply4({ a: view, b: model }) });
       const uData = new Float32Array(uniformBufferSize / 4);
       uData.set(mvp, 0);
       uData.set(model, 16);
-      uData.set([-0.5, 1.0, 0.3, 0], 32);
-      uData.set([0.2, 0.22, 0.25, 0], 36);
+      uData.set([-0.35, 0.9, 0.25, 0], 32);
+      uData.set([0.12, 0.14, 0.16, 0], 36);
       device.queue.writeBuffer(
         uniformBuffer,
         0,
