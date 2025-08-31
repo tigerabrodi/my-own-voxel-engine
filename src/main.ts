@@ -3,9 +3,10 @@ import { createLambertPipeline } from "./gpu/lambert";
 import { createGPUMesh } from "./gpu/mesh";
 import { polygonizeChunk } from "./rendering/marchingCubes";
 import { Chunk } from "./world/chunk";
-import { fillChunkHeights, type TerrainParams } from "./world/terrain";
+import { type TerrainParams } from "./world/terrain";
 // import { CHUNK_SIZE } from "./world/types";
 import { createFlyControls } from "./camera/flyControls";
+import { runDensityCompute } from "./gpu/compute";
 import { identity4, multiply4, perspective } from "./math/mat4";
 
 /**
@@ -40,8 +41,32 @@ async function main() {
     gain: 0.5,
   };
   const chunk = new Chunk({ chunkX: 0, chunkY: 0, chunkZ: 0 });
-  fillChunkHeights({ chunk, params: terrain });
+  // Compute densities on GPU, copy into chunk, then polygonize
+  const gpuDensities = await runDensityCompute({
+    device,
+    params: {
+      worldScale: terrain.worldScale,
+      amplitude: terrain.amplitude,
+      baseHeight: terrain.baseHeight,
+      octaves: terrain.octaves,
+      lacunarity: terrain.lacunarity,
+      gain: terrain.gain,
+      seed: terrain.seed,
+    },
+    chunkX: 0,
+    chunkY: 0,
+    chunkZ: 0,
+  });
+  for (let z = 0; z < 16; z++) {
+    for (let y = 0; y < 16; y++) {
+      for (let x = 0; x < 16; x++) {
+        const idx = x + y * 16 + z * 256;
+        chunk.setDensity(x, y, z, gpuDensities[idx]);
+      }
+    }
+  }
   const meshData = polygonizeChunk({ chunk, isoLevel: 0 });
+
   const gpuMesh = createGPUMesh({ device, mesh: meshData });
 
   const uniformBufferSize = 64 + 64 + 16 + 16; // mvp + model + light + ambient
