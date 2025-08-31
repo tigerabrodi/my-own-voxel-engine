@@ -5,7 +5,8 @@ import { polygonizeChunk } from "./rendering/marchingCubes";
 import { Chunk } from "./world/chunk";
 import { fillChunkHeights, type TerrainParams } from "./world/terrain";
 // import { CHUNK_SIZE } from "./world/types";
-import { identity4, multiply4, perspective, translation4 } from "./math/mat4";
+import { createFlyControls } from "./camera/flyControls";
+import { identity4, multiply4, perspective } from "./math/mat4";
 
 /**
  * Entry point: set up WebGL, generate one chunk of terrain, polygonize with
@@ -53,6 +54,13 @@ async function main() {
     entries: [{ binding: 0, resource: { buffer: uniformBuffer } }],
   });
 
+  const controls = createFlyControls({
+    canvas,
+    position: [24, 24, 48],
+    target: [8, 8, 8],
+  });
+  let lastTime = performance.now();
+
   function frame() {
     const resized = resizeCanvasToDisplaySize({ canvas });
     if (resized) {
@@ -64,6 +72,11 @@ async function main() {
       });
     }
 
+    const now = performance.now();
+    const dt = Math.min(0.05, (now - lastTime) / 1000);
+    lastTime = now;
+    controls.update({ dt });
+
     const aspect = canvas.width / canvas.height;
     const proj = perspective({
       fovyRad: Math.PI / 3,
@@ -71,7 +84,7 @@ async function main() {
       near: 0.1,
       far: 1000,
     });
-    const view = translation4({ x: 0, y: 0, z: -48 });
+    const view = controls.getViewMatrix();
     const model = identity4();
     const mvp = multiply4({ a: proj, b: multiply4({ a: view, b: model }) });
 
