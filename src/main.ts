@@ -1,19 +1,12 @@
-import { initWebGPU, resizeCanvasToDisplaySize } from "./gpu/context";
-import { createLambertPipeline } from "./gpu/lambert";
-import { createGPUMesh } from "./gpu/mesh";
-import { polygonizeChunk } from "./rendering/marchingCubes";
-import { Chunk } from "./world/chunk";
-import { type TerrainParams } from "./world/terrain";
-// import { CHUNK_SIZE } from "./world/types";
 import { createFlyControls } from "./camera/flyControls";
 import { runDensityCompute } from "./gpu/compute";
-import { identity4, multiply4, perspective } from "./math/mat4";
+import { initWebGPU, resizeCanvasToDisplaySize } from "./gpu/context";
+import { createLambertPipeline } from "./gpu/lambert";
+import { createGPUMesh, type GPUMesh } from "./gpu/mesh";
+import { multiply4, perspective, translation4 } from "./math/mat4";
+import { type TerrainParams } from "./world/terrain";
+import { CHUNK_SIZE } from "./world/types";
 
-/**
- * Entry point: set up WebGL, generate one chunk of terrain, polygonize with
- * Marching Cubes, upload mesh to GPU, and render with a simple lit shader.
- * Why: Completes Step 4 — rendering a single chunk.
- */
 async function main() {
   const { device, context, canvas, format } = await initWebGPU({
     canvasId: "glcanvas",
@@ -23,14 +16,13 @@ async function main() {
     format,
   });
 
-  // Depth
   let depthTexture = device.createTexture({
     size: { width: canvas.width, height: canvas.height },
     format: "depth24plus",
     usage: GPUTextureUsage.RENDER_ATTACHMENT,
   });
 
-  // CPU MC single chunk for now
+  // Terrain
   const terrain: TerrainParams = {
     seed: 1337,
     worldScale: 0.02,
@@ -40,35 +32,8 @@ async function main() {
     lacunarity: 2.0,
     gain: 0.5,
   };
-  const chunk = new Chunk({ chunkX: 0, chunkY: 0, chunkZ: 0 });
-  // Compute densities on GPU, copy into chunk, then polygonize
-  const gpuDensities = await runDensityCompute({
-    device,
-    params: {
-      worldScale: terrain.worldScale,
-      amplitude: terrain.amplitude,
-      baseHeight: terrain.baseHeight,
-      octaves: terrain.octaves,
-      lacunarity: terrain.lacunarity,
-      gain: terrain.gain,
-      seed: terrain.seed,
-    },
-    chunkX: 0,
-    chunkY: 0,
-    chunkZ: 0,
-  });
-  for (let z = 0; z < 16; z++) {
-    for (let y = 0; y < 16; y++) {
-      for (let x = 0; x < 16; x++) {
-        const idx = x + y * 16 + z * 256;
-        chunk.setDensity(x, y, z, gpuDensities[idx]);
-      }
-    }
-  }
-  const meshData = polygonizeChunk({ chunk, isoLevel: 0 });
 
-  const gpuMesh = createGPUMesh({ device, mesh: meshData });
-
+  // Uniforms
   const uniformBufferSize = 64 + 64 + 16 + 16; // mvp + model + light + ambient
   const uniformBuffer = device.createBuffer({
     size: uniformBufferSize,
@@ -79,6 +44,64 @@ async function main() {
     entries: [{ binding: 0, resource: { buffer: uniformBuffer } }],
   });
 
+  // Helper: MC in a worker
+  function mcPolygonizeInWorker(densities: Float32Array): Promise<{
+    positions: Float32Array;
+    normals: Float32Array;
+    indices: Uint16Array;
+  }> {
+    return new Promise((resolve) => {
+      const id = Math.floor(Math.random() * 1e9);
+      const worker = new Worker(
+        new URL("./workers/mcWorker.ts", import.meta.url),
+        { type: "module" }
+      );
+      worker.onmessage = (
+        ev: MessageEvent<{
+          id: number;
+          positions: Float32Array;
+          normals: Float32Array;
+          indices: Uint16Array;
+        }>
+      ) => {
+        resolve({
+          positions: ev.data.positions,
+          normals: ev.data.normals,
+          indices: ev.data.indices,
+        });
+        worker.terminate();
+      };
+      worker.postMessage({ id, densities }, [densities.buffer]);
+    });
+  }
+
+  // Preload fixed grid (3x3x1) sequentially before enabling controls
+  const gridMeshes: Array<{
+    cx: number;
+    cy: number;
+    cz: number;
+    mesh: GPUMesh;
+  }> = [];
+  const radius = 1;
+  for (let dz = -radius; dz <= radius; dz++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      const cx = dx,
+        cy = 0,
+        cz = dz;
+      const densities = await runDensityCompute({
+        device,
+        params: terrain,
+        chunkX: cx,
+        chunkY: cy,
+        chunkZ: cz,
+      });
+      const meshData = await mcPolygonizeInWorker(densities);
+      const gpuMesh = createGPUMesh({ device, mesh: meshData });
+      gridMeshes.push({ cx, cy, cz, mesh: gpuMesh });
+    }
+  }
+
+  // Controls after preload
   const controls = createFlyControls({
     canvas,
     position: [24, 24, 48],
@@ -98,7 +121,7 @@ async function main() {
     }
 
     const now = performance.now();
-    const dt = Math.min(0.05, (now - lastTime) / 1000);
+    const dt = Math.min(1 / 120, (now - lastTime) / 1000);
     lastTime = now;
     controls.update({ dt });
 
@@ -110,21 +133,6 @@ async function main() {
       far: 1000,
     });
     const view = controls.getViewMatrix();
-    const model = identity4();
-    const mvp = multiply4({ a: proj, b: multiply4({ a: view, b: model }) });
-
-    const uData = new Float32Array(uniformBufferSize / 4);
-    uData.set(mvp, 0);
-    uData.set(model, 16);
-    uData.set([-0.5, 1.0, 0.3, 0], 32);
-    uData.set([0.2, 0.22, 0.25, 0], 36);
-    device.queue.writeBuffer(
-      uniformBuffer,
-      0,
-      uData.buffer,
-      uData.byteOffset,
-      uData.byteLength
-    );
 
     const encoder = device.createCommandEncoder();
     const colorView = context.getCurrentTexture().createView();
@@ -147,10 +155,33 @@ async function main() {
     });
     pass.setPipeline(pipeline);
     pass.setBindGroup(0, bindGroup);
-    pass.setVertexBuffer(0, gpuMesh.position);
-    pass.setVertexBuffer(1, gpuMesh.normal);
-    pass.setIndexBuffer(gpuMesh.index, "uint16");
-    pass.drawIndexed(gpuMesh.indexCount, 1, 0, 0, 0);
+
+    // Draw preloaded grid
+    for (const rec of gridMeshes) {
+      const model = translation4({
+        x: rec.cx * CHUNK_SIZE,
+        y: rec.cy * CHUNK_SIZE,
+        z: rec.cz * CHUNK_SIZE,
+      });
+      const mvp = multiply4({ a: proj, b: multiply4({ a: view, b: model }) });
+      const uData = new Float32Array(uniformBufferSize / 4);
+      uData.set(mvp, 0);
+      uData.set(model, 16);
+      uData.set([-0.5, 1.0, 0.3, 0], 32);
+      uData.set([0.2, 0.22, 0.25, 0], 36);
+      device.queue.writeBuffer(
+        uniformBuffer,
+        0,
+        uData.buffer,
+        uData.byteOffset,
+        uData.byteLength
+      );
+      pass.setVertexBuffer(0, rec.mesh.position);
+      pass.setVertexBuffer(1, rec.mesh.normal);
+      pass.setIndexBuffer(rec.mesh.index, "uint16");
+      pass.drawIndexed(rec.mesh.indexCount, 1, 0, 0, 0);
+    }
+
     pass.end();
     device.queue.submit([encoder.finish()]);
     requestAnimationFrame(frame);
