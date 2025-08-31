@@ -1,93 +1,74 @@
-import { createFlyControls } from "./camera/flyControls";
+import { initWebGPU, resizeCanvasToDisplaySize } from "./gpu/context";
+import { createLambertPipeline } from "./gpu/lambert";
+import { createGPUMesh } from "./gpu/mesh";
 import { polygonizeChunk } from "./rendering/marchingCubes";
+import { Chunk } from "./world/chunk";
+import { fillChunkHeights, type TerrainParams } from "./world/terrain";
+// import { CHUNK_SIZE } from "./world/types";
 import {
   identity4,
   multiply4,
   perspective,
   translation4,
 } from "./webgl/camera";
-import { initWebGLCanvas, resizeCanvasToDisplaySize } from "./webgl/context";
-import { bindMeshAttributes, createMesh } from "./webgl/mesh";
-import { createLambertProgram } from "./webgl/programs";
-import { Chunk } from "./world/chunk";
-import { createChunkManager } from "./world/chunkManager";
-import { fillChunkHeights, type TerrainParams } from "./world/terrain";
-import { CHUNK_SIZE } from "./world/types";
 
 /**
  * Entry point: set up WebGL, generate one chunk of terrain, polygonize with
  * Marching Cubes, upload mesh to GPU, and render with a simple lit shader.
  * Why: Completes Step 4 — rendering a single chunk.
  */
-function main() {
-  const { gl, canvas } = initWebGLCanvas({ canvasId: "glcanvas" });
+async function main() {
+  const { device, context, canvas, format } = await initWebGPU({
+    canvasId: "glcanvas",
+  });
+  const { pipeline, bindGroupLayout } = createLambertPipeline({
+    device,
+    format,
+  });
 
-  // 1) Generate terrain densities for a single chunk
-  const testChunk = new Chunk({ chunkX: 0, chunkY: 0, chunkZ: 0 });
-  const terrainParams: TerrainParams = {
+  // Depth
+  let depthTexture = device.createTexture({
+    size: { width: canvas.width, height: canvas.height },
+    format: "depth24plus",
+    usage: GPUTextureUsage.RENDER_ATTACHMENT,
+  });
+
+  // CPU MC single chunk for now
+  const terrain: TerrainParams = {
     seed: 1337,
-    worldScale: 0.02, // lower = larger features
+    worldScale: 0.02,
     amplitude: 12,
     baseHeight: 8,
     octaves: 4,
     lacunarity: 2.0,
     gain: 0.5,
   };
+  const chunk = new Chunk({ chunkX: 0, chunkY: 0, chunkZ: 0 });
+  fillChunkHeights({ chunk, params: terrain });
+  const meshData = polygonizeChunk({ chunk, isoLevel: 0 });
+  const gpuMesh = createGPUMesh({ device, mesh: meshData });
 
-  fillChunkHeights({ chunk: testChunk, params: terrainParams });
-  const center = Math.floor(CHUNK_SIZE / 2);
-  console.log(
-    "Center density after terrain fill:",
-    testChunk.getDensity(center, center, center)
-  );
-
-  // 2) Marching Cubes: convert densities → triangle mesh
-  const meshData = polygonizeChunk({ chunk: testChunk, isoLevel: 0 });
-  console.log(
-    "Mesh vertex count:",
-    meshData.positions.length / 3,
-    "triangles:",
-    meshData.indices.length / 3
-  );
-
-  // 3) Create GL program and upload mesh buffers
-  const program = createLambertProgram({ gl });
-  const vaoExt = gl.getExtension("OES_vertex_array_object");
-  const glMesh = createMesh({ gl, ext: vaoExt, mesh: meshData });
-
-  // 3b) Chunk manager for multi-chunk rendering
-  const chunkManager = createChunkManager({ terrain: terrainParams });
-
-  let lastTime = performance.now();
-  const controls = createFlyControls({
-    canvas,
-    position: [24, 24, 48],
-    target: [8, 8, 8],
+  const uniformBufferSize = 64 + 64 + 16 + 16; // mvp + model + light + ambient
+  const uniformBuffer = device.createBuffer({
+    size: uniformBufferSize,
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+  });
+  const bindGroup = device.createBindGroup({
+    layout: bindGroupLayout,
+    entries: [{ binding: 0, resource: { buffer: uniformBuffer } }],
   });
 
-  function render() {
-    const now = performance.now();
-    const dt = Math.min(0.05, (now - lastTime) / 1000);
-    lastTime = now;
+  function frame() {
     const resized = resizeCanvasToDisplaySize({ canvas });
     if (resized) {
-      // Ensure the GL viewport matches the actual canvas pixel size.
-      // Without this, content can look stretched or clipped after resizes/zoom.
-      gl.viewport(0, 0, canvas.width, canvas.height);
+      depthTexture.destroy();
+      depthTexture = device.createTexture({
+        size: { width: canvas.width, height: canvas.height },
+        format: "depth24plus",
+        usage: GPUTextureUsage.RENDER_ATTACHMENT,
+      });
     }
 
-    // Set the color used when clearing the screen.
-    // clearColor takes normalized RGBA components in the range [0, 1].
-    // Here: a dark blue‑gray background (R=0.07, G=0.09, B=0.12) with full opacity (A=1.0).
-    // You can think of it like RGB in 0–255 scaled down: ~ (18, 23, 31).
-    gl.clearColor(0.07, 0.09, 0.12, 1.0);
-
-    // Clear both the color buffer (the visible pixels) and the depth buffer
-    // (used for correct 3D occlusion). Clearing depth each frame avoids
-    // leftover depth values from previous frames affecting current rendering.
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
-    // 4) Camera + matrices (now driven by fly controls)
     const aspect = canvas.width / canvas.height;
     const proj = perspective({
       fovyRad: Math.PI / 3,
@@ -95,53 +76,53 @@ function main() {
       near: 0.1,
       far: 1000,
     });
-    controls.update({ dt });
-    const camPos = controls.getPosition();
-    chunkManager.update({
-      centerX: camPos[0],
-      centerY: camPos[1],
-      centerZ: camPos[2],
-      radius: 2,
-    });
-    const view = controls.getViewMatrix();
+    const view = translation4({ x: 0, y: 0, z: -48 });
     const model = identity4();
     const mvp = multiply4({ a: proj, b: multiply4({ a: view, b: model }) });
 
-    gl.useProgram(program);
-    const u_mvp = gl.getUniformLocation(program, "u_mvp");
-    const u_model = gl.getUniformLocation(program, "u_model");
-    const u_lightDir = gl.getUniformLocation(program, "u_lightDir");
-    const u_ambient = gl.getUniformLocation(program, "u_ambient");
-    gl.uniformMatrix4fv(u_mvp, false, mvp);
-    gl.uniformMatrix4fv(u_model, false, model);
-    gl.uniform3f(u_lightDir, -0.5, 1.0, 0.3);
-    gl.uniform3f(u_ambient, 0.2, 0.22, 0.25);
+    const uData = new Float32Array(uniformBufferSize / 4);
+    uData.set(mvp, 0);
+    uData.set(model, 16);
+    uData.set([-0.5, 1.0, 0.3, 0], 32);
+    uData.set([0.2, 0.22, 0.25, 0], 36);
+    device.queue.writeBuffer(
+      uniformBuffer,
+      0,
+      uData.buffer,
+      uData.byteOffset,
+      uData.byteLength
+    );
 
-    // 5) Draw all loaded chunks using the same mesh geometry, with per-chunk translation
-    for (const [key] of chunkManager.getLoaded()) {
-      const [cx, cy, cz] = key.split(",").map(Number);
-      const modelT = translation4({
-        x: cx * CHUNK_SIZE,
-        y: cy * CHUNK_SIZE,
-        z: cz * CHUNK_SIZE,
-      });
-      const mvpChunk = multiply4({
-        a: proj,
-        b: multiply4({ a: view, b: modelT }),
-      });
-      gl.uniformMatrix4fv(u_mvp, false, mvpChunk);
-      gl.uniformMatrix4fv(u_model, false, modelT);
-      bindMeshAttributes({ gl, ext: vaoExt, mesh: glMesh, program });
-      gl.drawElements(gl.TRIANGLES, glMesh.indexCount, gl.UNSIGNED_SHORT, 0);
-    }
-
-    requestAnimationFrame(render);
+    const encoder = device.createCommandEncoder();
+    const colorView = context.getCurrentTexture().createView();
+    const depthView = depthTexture.createView();
+    const pass = encoder.beginRenderPass({
+      colorAttachments: [
+        {
+          view: colorView,
+          clearValue: { r: 0.07, g: 0.09, b: 0.12, a: 1 },
+          loadOp: "clear",
+          storeOp: "store",
+        },
+      ],
+      depthStencilAttachment: {
+        view: depthView,
+        depthClearValue: 1.0,
+        depthLoadOp: "clear",
+        depthStoreOp: "store",
+      },
+    });
+    pass.setPipeline(pipeline);
+    pass.setBindGroup(0, bindGroup);
+    pass.setVertexBuffer(0, gpuMesh.position);
+    pass.setVertexBuffer(1, gpuMesh.normal);
+    pass.setIndexBuffer(gpuMesh.index, "uint16");
+    pass.drawIndexed(gpuMesh.indexCount, 1, 0, 0, 0);
+    pass.end();
+    device.queue.submit([encoder.finish()]);
+    requestAnimationFrame(frame);
   }
-
-  // Depth testing ensures nearer fragments hide farther ones in 3D.
-  // We enable it up front even though we are not drawing geometry yet.
-  gl.enable(gl.DEPTH_TEST);
-  render();
+  frame();
 }
 
 main();
