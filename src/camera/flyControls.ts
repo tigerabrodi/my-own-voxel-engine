@@ -1,4 +1,4 @@
-import { lookAt, type Mat4 } from "../webgl/camera";
+import { lookAt, type Mat4 } from "../math/mat4";
 
 // FPS-style fly controls with pointer lock and WASD.
 // - What: maintains camera position and orientation (yaw/pitch) and produces a view matrix.

@@ -38,17 +38,31 @@ export function createGPUMesh({
     mesh.normals.byteLength
   );
 
+  // Ensure index data is 4-byte aligned for writeBuffer
+  const indexBytes = mesh.indices.byteLength;
+  const paddedBytes = (indexBytes + 3) & ~3;
   const index = device.createBuffer({
-    size: mesh.indices.byteLength,
+    size: paddedBytes,
     usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
   });
-  device.queue.writeBuffer(
-    index,
-    0,
-    mesh.indices.buffer,
-    mesh.indices.byteOffset,
-    mesh.indices.byteLength
-  );
+  if ((indexBytes & 3) === 0) {
+    device.queue.writeBuffer(
+      index,
+      0,
+      mesh.indices.buffer,
+      mesh.indices.byteOffset,
+      indexBytes
+    );
+  } else {
+    const src = new Uint8Array(
+      mesh.indices.buffer,
+      mesh.indices.byteOffset,
+      indexBytes
+    );
+    const padded = new Uint8Array(paddedBytes);
+    padded.set(src);
+    device.queue.writeBuffer(index, 0, padded);
+  }
 
   return { position, normal, index, indexCount: mesh.indices.length };
 }

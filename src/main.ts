@@ -5,12 +5,7 @@ import { polygonizeChunk } from "./rendering/marchingCubes";
 import { Chunk } from "./world/chunk";
 import { fillChunkHeights, type TerrainParams } from "./world/terrain";
 // import { CHUNK_SIZE } from "./world/types";
-import {
-  identity4,
-  multiply4,
-  perspective,
-  translation4,
-} from "./webgl/camera";
+import { identity4, multiply4, perspective, translation4 } from "./math/mat4";
 
 /**
  * Entry point: set up WebGL, generate one chunk of terrain, polygonize with
