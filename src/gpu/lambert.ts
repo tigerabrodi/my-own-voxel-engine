@@ -44,7 +44,7 @@ export function createLambertPipeline({
       entryPoint: "fs_main",
       targets: [{ format }],
     },
-    primitive: { topology: "triangle-list", cullMode: "back" },
+    primitive: { topology: "triangle-list", cullMode: "back", frontFace: "cw" },
     depthStencil: {
       format: depthFormat,
       depthWriteEnabled: true,
