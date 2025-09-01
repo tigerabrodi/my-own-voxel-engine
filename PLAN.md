@@ -10,7 +10,7 @@ Assumptions
 
 ### Phase 1 — Foundations
 
-1. Project bootstrap with renderer, scene, camera, loop
+1. Project bootstrap with renderer, scene, camera, loop ✅
 
 - What: Create `THREE.WebGLRenderer`, `THREE.Scene`, `THREE.PerspectiveCamera`, and a `requestAnimationFrame` loop. Add window resize handling.
 - Why: Establish a predictable rendering baseline.
