@@ -1,110 +1,159 @@
-## Voxel Engine MVP Plan (Phase 2)
+## Voxel Engine (Three.js) — Detailed, Chronological Plan
 
-Scope: Build a minimal voxel terrain you can fly around, using only WebGL (no 3rd‑party rendering libs). Keep systems small and iterate.
+This plan rebuilds the voxel engine with Three.js, focusing on clarity and incremental verification. Each step states what to implement, why it matters, and how to verify (visual checks or logs).
 
-Constraints
+Assumptions
 
-- Only WebGL for rendering (no Three.js, etc.)
-- TypeScript
-- Chunk size: 16 x 16 x 16
-- Keep data structures and APIs small and testable
+- Vite + TypeScript + Three.js.
+- Entry: `src/main.ts`; root `index.html` contains a canvas or uses default renderer canvas insertion.
+- Use `console.log` and `renderer.info` for simple diagnostics.
 
-Target directory layout
+### Phase 1 — Foundations
 
-```
-src/
-  main.ts
-  webgl/          # WebGL setup, shaders
-  world/          # Chunks, world gen
-  camera/         # Controls, movement
-  rendering/      # Marching cubes, mesh gen
-public/
-```
+1. Project bootstrap with renderer, scene, camera, loop
 
-End goal for Phase 2
+- What: Create `THREE.WebGLRenderer`, `THREE.Scene`, `THREE.PerspectiveCamera`, and a `requestAnimationFrame` loop. Add window resize handling.
+- Why: Establish a predictable rendering baseline.
+- Test:
+  - Visual: Canvas shows a clear color (e.g., dark gray), no errors.
+  - Logs: `console.log("boot: three baseline ok")` prints once.
 
-- Multiple chunks visible at once (at least a 3x3 area around the player)
-- Smooth FPS camera (WASD + mouse, pointer lock)
-- Height‑based terrain (noise‑driven) with a simple erosion‑like touch
-- Marching Cubes rendering with basic directional lighting
+2. Lighting + simple helpers
 
----
+- What: Add `THREE.AmbientLight`, `THREE.DirectionalLight`, and `THREE.AxesHelper` or `THREE.GridHelper`.
+- Why: Confirm lighting works and set a spatial frame of reference.
+- Test:
+  - Visual: Axes/grid visible; moving light changes helper shading subtly.
+  - Logs: Light and helper object counts in scene hierarchy.
 
-Step‑by‑step roadmap
+3. Voxel data container (CPU) with small utilities
 
-1. Project setup + basic WebGL
+- What: Implement a minimal voxel volume container using a 3D array or flat array with index helpers `xyz → i`. Provide `getVoxel`, `setVoxel`, `fill(predicate)`.
+- Why: Core data model for voxels; independent from rendering.
+- Test:
+  - Logs: After a few sets/gets, log sample values and array length.
+  - Non-visual: Bounds checks and index mapping correctness logs.
 
-- Create a WebGL context, set clear color, resize handling
-- Render a test triangle (or just clear) to verify pipeline
-- Acceptance: Page loads, canvas resizes, stable render loop with requestAnimationFrame
+4. Geometry adaptor: from voxel volume to BufferGeometry (naive cubes)
 
-2. Chunk system (16x16x16)
+- What: Convert each solid cell to a cube mesh (greedy meshing not required now). Generate `position`, `normal`, `uv`, and `index` arrays; build `THREE.BufferGeometry` and `THREE.Mesh`.
+- Why: First end-to-end path from data to something on screen.
+- Test:
+  - Visual: A small blocky shape appears (e.g., 8×8×8 hill or a single cube).
+  - Logs:
+    - Number of cubes → expected (e.g., count of filled cells)
+    - Geometry attributes sizes.
 
-- Define `Chunk` data structure (density/voxel scalar field)
-- Coordinate helpers: world <-> chunk <-> local indices
-- Lazy allocation for chunk data
-- Acceptance: Create a chunk, set/get densities, unit tests for indexing
+5. Marching Cubes integration (CPU)
 
-3. Simple height‑based terrain
+- What: Implement/port MC tables; write `polygonize(densityField, isoLevel)` producing triangle soup; compute vertex normals via gradient or cross products; return `BufferGeometry`.
+- Why: Smooth surface extraction from scalar fields; foundation for terrain.
+- Test:
+  - Visual: Render an isosurface of a sphere SDF; rotating shows smooth lighting.
+  - Logs: Triangle and vertex counts within expected ranges (not zero, not exploding).
 
-- Implement small 2D noise (value or simplex variant implemented in‑house)
-- Terrain function: height = noise(x,z) \* amplitude + offset
-- Optional: micro erosion touch (e.g., blur/slope damp) to soften sharp steps
-- Fill chunk scalar field with signed distance to surface (isoLevel = 0)
-- Acceptance: Given a chunk coordinate, procedurally fill its 16^3 density
+6. Basic material & camera controls
 
-4. Marching Cubes (single chunk)
+- What: Use `THREE.MeshStandardMaterial` (color, metalness=0, roughness≈0.9). Add `OrbitControls` for quick inspection.
+- Why: Lighting verifies normals; controls speed up iteration.
+- Test:
+  - Visual: Specular highlights change with camera; orbit and zoom work.
+  - Logs: `renderer.info.render.triangles` reasonable and changes with LOD/size.
 
-- Implement MC lookup tables
-- Polygonize one 16^3 chunk to produce vertices, normals, indices
-- Generate per‑vertex normals from gradient of density
-- Upload mesh to GPU buffers and draw
-- Acceptance: One chunk renders a shaded mesh at origin
+### Phase 2 — First Voxel Engine Core
 
-5. Camera controls (WASD + mouse)
+7. Chunk definition and coordinate system
 
-- Pointer lock, mouse look, WASD + Space/Shift (fly)
-- Frame‑rate independent movement with delta time
-- Acceptance: Smooth, predictable movement and look on desktop
+- What: Define constants `CHUNK_SIZE`, chunk world size = `CHUNK_SIZE` units; implement helpers to map world position → chunk key + local coord; store chunks in `Map` keyed by `x,y,z`.
+- Why: Organize world into manageable regions.
+- Test:
+  - Logs: For a few sample world coords, print computed chunk keys and locals; verify round-trips.
 
-6. Multi‑chunk system
+8. Chunk container objects in Three.js
 
-- Chunk manager: load/generate/unload around player position
-- World to chunk mapping; maintain a small active region (e.g., 3x3 or 5x5)
-- Simple visibility selection (no heavy culling yet)
-- Acceptance: Multiple chunks generate and render, updating as player moves
+- What: Represent each chunk as a `THREE.Group` containing a single MC mesh. Position the group by chunk origin.
+- Why: Simple lifetime management; easy add/remove.
+- Test:
+  - Visual: Adding multiple chunk groups places meshes on a grid.
+  - Logs: Scene child count equals number of active chunks.
 
-7. Basic directional lighting
+9. Terrain generation (heightfield SDF → density field)
 
-- Simple Lambert shading in fragment shader
-- Uniform for light direction, basic ambient term
-- Acceptance: Lighting reacts to surface normals and camera
+- What: Implement 2D noise-based height function H(x,z). Density(y) = y − H(x,z). Fill chunk density fields then run MC.
+- Why: Produce coherent outdoor terrain quickly.
+- Test:
+  - Visual: Hills/valleys; iso surface around y≈H. Changing amplitude/frequency alters shape.
+  - Logs: Generation time per chunk (ms), min/max density, triangle counts.
 
----
+10. Basic camera movement options
 
-Milestones & acceptance
+- What: Keep `OrbitControls` for inspection; optionally add simple WASD fly controls later.
+- Why: Navigate terrain comfortably.
+- Test:
+  - Visual: Camera navigation smooth; no control conflicts.
+  - Logs: Current camera position printed on key press for debugging.
 
-- M1 (Steps 1–2): WebGL loop + chunk data structure proven
-- M2 (Step 3): Terrain fills scalar field consistently for any chunk coord
-- M3 (Step 4): Single chunk renders with MC and normals
-- M4 (Step 5): FPS camera stable
-- M5 (Steps 6–7): 3x3 (or more) chunks render with directional light; flyable world
+11. Materials and lighting polish
 
-Key design decisions (initial defaults)
+- What: Configure `DirectionalLight` with shadow map off initially; tweak material color and roughness; add ambient.
+- Why: Readable surface without the cost/complexity of shadows.
+- Test:
+  - Visual: Terrain readable from most angles; no glaring specular artifacts.
+  - Logs: Material params on toggle to ensure runtime updates work.
 
-- Coordinate system: right‑handed; +X right, +Y up, +Z forward
-- Units: 1 unit = 1 voxel; chunk world size = 16 units on each axis
-- Iso level: 0.0; densities negative = inside terrain
-- Terrain scale: start with coarse noise (e.g., 0.01–0.02) and amplitude ~12–24
+### Phase 3 — Expand and Optimize
 
-Out‑of‑scope (for now)
+12. Active ring loading around camera (static radius)
 
-- Advanced erosion simulation, shadows, AO, PBR
-- GPU compute pipelines, mesh LOD, occlusion culling
-- Saving/loading worlds
+- What: Compute required chunk keys in a radius R (XZ) around camera; load missing chunks (generate density+mesh); keep them in memory.
+- Why: Show more terrain while bounding generation work.
+- Test:
+  - Visual: As camera moves, new surrounding chunks appear; no hard stutter.
+  - Logs: On update, print counts: `needed`, `loaded`, `newlyAdded`.
 
-Next actionable tasks (to start immediately)
+13. Unload chunks outside radius
 
-- Create `src/webgl/` with a minimal GL init (context, resize, clear)
-- Hook a render loop in `src/main.ts`
-- Add a simple input loop scaffold for future camera controls
+- What: Remove chunk groups and drop geometry for chunks beyond R.
+- Why: Keep memory within bounds.
+- Test:
+  - Visual: Distant chunks disappear when far enough; near area remains filled.
+  - Logs: `removed` count on each maintenance pass; track total memory via `renderer.info` trends.
+
+14. Frustum-aware visibility (simple)
+
+- What: Rely on Three.js built-in frustum culling per object; ensure chunk groups have correct `matrixWorld` and bounding spheres/boxes via geometry.
+- Why: Avoid drawing off-screen chunks.
+- Test:
+  - Visual: Looking at empty sky reduces draw calls.
+  - Logs: Observe `renderer.info.render.calls` drop when looking away.
+
+15. Terrain improvements (procedural variety)
+
+- What: Add layered noise: base heightfield + ridged modifier and optional domain warp; expose a few tunable params.
+- Why: More interesting silhouettes with modest cost.
+- Test:
+  - Visual: Sharper ridges and warped features; toggles reflect immediately.
+  - Logs: Regeneration times stay stable; triangle counts within acceptable bounds.
+
+16. LOD with THREE.LOD
+
+- What: For each chunk, generate 2–3 geometry resolutions (e.g., different sampling steps) and attach them to a `THREE.LOD` object with distance thresholds.
+- Why: Reduce triangle counts at distance while keeping close detail.
+- Test:
+  - Visual: Walking toward/away changes mesh detail smoothly.
+  - Logs: Triangle counts and draw calls drop when far; thresholds adjustable at runtime.
+
+17. Optional: Basic runtime profiling HUD
+
+- What: Small on-screen text overlay: fps, active chunks, triangles, draw calls.
+- Why: Quantify changes as features land.
+- Test:
+  - Visual: Overlay updates each frame and matches `renderer.info`.
+  - Logs: None (overlay is the metric).
+
+Deliverable Criteria (high-level)
+
+- Stable render loop with camera and lighting.
+- MC-generated terrain rendered via chunks; ring-based load/unload works.
+- Frustum culling effective; LOD reduces distant cost.
+- Simple, tweakable worldgen producing varied terrain.
