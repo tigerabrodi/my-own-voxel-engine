@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { VoxelVolume } from "./voxel/volume";
 
 const canvas = document.getElementById("glcanvas") as HTMLCanvasElement | null;
 
@@ -44,6 +45,18 @@ window.addEventListener("resize", () => {
 });
 
 console.log("boot: three baseline ok");
+
+// Voxel sanity: create a tiny 8^3 volume and set a few cells
+const volume = new VoxelVolume(8, 8, 8, 0);
+volume.setVoxel(0, 0, 0, 1);
+volume.setVoxel(7, 7, 7, 2);
+console.log("voxel: dims", volume.sizeX, volume.sizeY, volume.sizeZ);
+console.log(
+  "voxel: first",
+  volume.getVoxel(0, 0, 0),
+  "last",
+  volume.getVoxel(7, 7, 7)
+);
 
 function animate(): void {
   requestAnimationFrame(animate);

@@ -33,7 +33,7 @@ Assumptions
   - Visual: Axes/grid visible; moving light changes helper shading subtly.
   - Logs: Light and helper object counts in scene hierarchy.
 
-3. Voxel data container (CPU) with small utilities
+3. Voxel data container (CPU) with small utilities ✅
 
 - What: Implement a minimal voxel volume container using a 3D array or flat array with index helpers `xyz → i`. Provide `getVoxel`, `setVoxel`, `fill(predicate)`.
 - Why: Core data model for voxels; independent from rendering.
