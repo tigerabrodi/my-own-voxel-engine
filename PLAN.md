@@ -15,8 +15,15 @@ Assumptions
 - What: Create `THREE.WebGLRenderer`, `THREE.Scene`, `THREE.PerspectiveCamera`, and a `requestAnimationFrame` loop. Add window resize handling.
 - Why: Establish a predictable rendering baseline.
 - Test:
+
   - Visual: Canvas shows a clear color (e.g., dark gray), no errors.
   - Logs: `console.log("boot: three baseline ok")` prints once.
+
+- Notes:
+  - Call `renderer.setPixelRatio(window.devicePixelRatio)` and `renderer.setSize(innerWidth, innerHeight)`.
+  - Set `renderer.outputColorSpace = THREE.SRGBColorSpace`.
+  - Optional: `renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0`.
+  - On window resize: update `camera.aspect`, call `camera.updateProjectionMatrix()`, and `renderer.setSize()`.
 
 2. Lighting + simple helpers
 
@@ -39,26 +46,49 @@ Assumptions
 - What: Convert each solid cell to a cube mesh (greedy meshing not required now). Generate `position`, `normal`, `uv`, and `index` arrays; build `THREE.BufferGeometry` and `THREE.Mesh`.
 - Why: First end-to-end path from data to something on screen.
 - Test:
+
   - Visual: A small blocky shape appears (e.g., 8×8×8 hill or a single cube).
   - Logs:
     - Number of cubes → expected (e.g., count of filled cells)
     - Geometry attributes sizes.
+
+- Notes:
+  - Attributes:
+    - `geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3))`
+    - `geometry.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(normals), 3))`
+    - `geometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvs), 2))`
+    - `geometry.setIndex(new THREE.BufferAttribute(new Uint16Array(indices), 1))` (use `Uint32Array` if vertices > 65535)
+  - If normals omitted, call `geometry.computeVertexNormals()`.
+  - After writing attributes, compute bounds: `geometry.computeBoundingSphere()` (and `computeBoundingBox()` if needed).
 
 5. Marching Cubes integration (CPU)
 
 - What: Implement/port MC tables; write `polygonize(densityField, isoLevel)` producing triangle soup; compute vertex normals via gradient or cross products; return `BufferGeometry`.
 - Why: Smooth surface extraction from scalar fields; foundation for terrain.
 - Test:
+
   - Visual: Render an isosurface of a sphere SDF; rotating shows smooth lighting.
   - Logs: Triangle and vertex counts within expected ranges (not zero, not exploding).
+
+- Notes:
+  - Ensure counter-clockwise winding for faces (front-face default).
+  - Prefer indexed geometry: `geometry.setIndex(indices)` to reduce duplication.
+  - If generating positions only, run `geometry.computeVertexNormals()`.
+  - Optional cleanup: merge nearly-duplicate vertices for better normals using `BufferGeometryUtils.mergeVertices` (if imported).
 
 6. Basic material & camera controls
 
 - What: Use `THREE.MeshStandardMaterial` (color, metalness=0, roughness≈0.9). Add `OrbitControls` for quick inspection.
 - Why: Lighting verifies normals; controls speed up iteration.
 - Test:
+
   - Visual: Specular highlights change with camera; orbit and zoom work.
   - Logs: `renderer.info.render.triangles` reasonable and changes with LOD/size.
+
+- Notes:
+  - Import controls: `import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'` and bind to `renderer.domElement`.
+  - `MeshStandardMaterial` requires lights; set `flatShading: false` for smooth MC surfaces.
+  - Debug logs: print `camera.position` and `controls.target` on input for quick sanity checks.
 
 ### Phase 2 — First Voxel Engine Core
 
@@ -124,8 +154,13 @@ Assumptions
 - What: Rely on Three.js built-in frustum culling per object; ensure chunk groups have correct `matrixWorld` and bounding spheres/boxes via geometry.
 - Why: Avoid drawing off-screen chunks.
 - Test:
+
   - Visual: Looking at empty sky reduces draw calls.
   - Logs: Observe `renderer.info.render.calls` drop when looking away.
+
+- Notes:
+  - Leave `mesh.frustumCulled = true` (default) unless debugging visibility issues.
+  - After attributes are updated, recompute bounds: `geometry.computeBoundingSphere()` (and optionally `computeBoundingBox()`).
 
 15. Terrain improvements (procedural variety)
 
@@ -140,8 +175,17 @@ Assumptions
 - What: For each chunk, generate 2–3 geometry resolutions (e.g., different sampling steps) and attach them to a `THREE.LOD` object with distance thresholds.
 - Why: Reduce triangle counts at distance while keeping close detail.
 - Test:
+
   - Visual: Walking toward/away changes mesh detail smoothly.
   - Logs: Triangle counts and draw calls drop when far; thresholds adjustable at runtime.
+
+- Notes:
+  - Usage example:
+    - `const lod = new THREE.LOD();`
+    - `lod.addLevel(meshHigh, 0);`
+    - `lod.addLevel(meshMid, 50);`
+    - `lod.addLevel(meshLow, 120);`
+  - Distances are world units from the camera; tune to your scene scale.
 
 17. Optional: Basic runtime profiling HUD
 
