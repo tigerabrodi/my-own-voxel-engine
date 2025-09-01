@@ -41,7 +41,7 @@ Assumptions
   - Logs: After a few sets/gets, log sample values and array length.
   - Non-visual: Bounds checks and index mapping correctness logs.
 
-4. Geometry adaptor: from voxel volume to BufferGeometry (naive cubes)
+4. Geometry adaptor: from voxel volume to BufferGeometry (naive cubes) ✅
 
 - What: Convert each solid cell to a cube mesh (greedy meshing not required now). Generate `position`, `normal`, `uv`, and `index` arrays; build `THREE.BufferGeometry` and `THREE.Mesh`.
 - Why: First end-to-end path from data to something on screen.

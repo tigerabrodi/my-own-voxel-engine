@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { buildNaiveCubesGeometry } from "./voxel/mesher";
 import { VoxelVolume } from "./voxel/volume";
 
 const canvas = document.getElementById("glcanvas") as HTMLCanvasElement | null;
@@ -46,17 +47,27 @@ window.addEventListener("resize", () => {
 
 console.log("boot: three baseline ok");
 
-// Voxel sanity: create a tiny 8^3 volume and set a few cells
+// Voxel sanity + naive cubes mesh
 const volume = new VoxelVolume(8, 8, 8, 0);
-volume.setVoxel(0, 0, 0, 1);
-volume.setVoxel(7, 7, 7, 2);
+for (let z = 2; z <= 4; z++) {
+  for (let y = 2; y <= 4; y++) {
+    for (let x = 2; x <= 4; x++) {
+      volume.setVoxel(x, y, z, 1);
+    }
+  }
+}
 console.log("voxel: dims", volume.sizeX, volume.sizeY, volume.sizeZ);
-console.log(
-  "voxel: first",
-  volume.getVoxel(0, 0, 0),
-  "last",
-  volume.getVoxel(7, 7, 7)
-);
+console.log("voxel: sample", volume.getVoxel(2, 2, 2));
+
+const geom = buildNaiveCubesGeometry(volume, (v) => v > 0);
+const mat = new THREE.MeshStandardMaterial({
+  color: 0x88a0ff,
+  metalness: 0,
+  roughness: 0.9,
+});
+const mesh = new THREE.Mesh(geom, mat);
+mesh.position.set(-4, 0, -4);
+scene.add(mesh);
 
 function animate(): void {
   requestAnimationFrame(animate);
