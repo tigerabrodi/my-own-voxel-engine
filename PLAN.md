@@ -25,7 +25,7 @@ Assumptions
   - Optional: `renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0`.
   - On window resize: update `camera.aspect`, call `camera.updateProjectionMatrix()`, and `renderer.setSize()`.
 
-2. Lighting + simple helpers
+2. Lighting + simple helpers ✅
 
 - What: Add `THREE.AmbientLight`, `THREE.DirectionalLight`, and `THREE.AxesHelper` or `THREE.GridHelper`.
 - Why: Confirm lighting works and set a spatial frame of reference.
