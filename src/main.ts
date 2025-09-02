@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls.js";
 import { marchingCubes } from "./mc/mesher";
 import { buildNaiveCubesGeometry } from "./voxel/mesher";
 import { VoxelVolume } from "./voxel/volume";
@@ -33,12 +34,19 @@ const camera = new THREE.PerspectiveCamera(
   1000
 );
 camera.position.set(0, 4, 12);
+const clock = new THREE.Clock();
 
 // Orbit controls
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 controls.target.set(-8, 2, -8);
+
+// Pointer-lock FPS look
+const fpControls = new PointerLockControls(camera, renderer.domElement);
+renderer.domElement.addEventListener("click", () => fpControls.lock());
+fpControls.addEventListener("lock", () => console.log("pointer: locked"));
+fpControls.addEventListener("unlock", () => console.log("pointer: unlocked"));
 
 // Lights
 const ambient = new THREE.AmbientLight(0xffffff, 0.25);
@@ -146,9 +154,39 @@ for (const s of samples) {
   );
 }
 
+// Simple keyboard fly controls (WASD move, Q/E down/up)
+const keys = new Set<string>();
+window.addEventListener("keydown", (e) => keys.add(e.key.toLowerCase()));
+window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
+const moveSpeed = 8; // units per second
+const tmpForward = new THREE.Vector3();
+const tmpRight = new THREE.Vector3();
+const tmpMove = new THREE.Vector3();
+
 function animate(): void {
   requestAnimationFrame(animate);
-  controls.update();
+  const dt = clock.getDelta();
+
+  // Fly translation in view space
+  tmpMove.set(0, 0, 0);
+  camera.getWorldDirection(tmpForward).normalize();
+  tmpRight.crossVectors(tmpForward, camera.up).normalize();
+
+  if (keys.has("w")) tmpMove.add(tmpForward);
+  if (keys.has("s")) tmpMove.sub(tmpForward);
+  if (keys.has("d")) tmpMove.add(tmpRight);
+  if (keys.has("a")) tmpMove.sub(tmpRight);
+  if (keys.has("e")) tmpMove.add(camera.up);
+  if (keys.has("q")) tmpMove.sub(camera.up);
+
+  if (tmpMove.lengthSq() > 0) {
+    tmpMove.normalize().multiplyScalar(moveSpeed * dt);
+    camera.position.add(tmpMove);
+    // Keep OrbitControls target in sync when not in FPS mode
+    if (!fpControls.isLocked) controls.target.add(tmpMove);
+  }
+
+  if (!fpControls.isLocked) controls.update();
   renderer.render(scene, camera);
 }
 

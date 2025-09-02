@@ -115,7 +115,7 @@ Assumptions
   - Visual: Hills/valleys; iso surface around y≈H. Changing amplitude/frequency alters shape.
   - Logs: Generation time per chunk (ms), min/max density, triangle counts.
 
-10. Basic camera movement options
+10. Basic camera movement options ✅
 
 - What: Keep `OrbitControls` for inspection; optionally add simple WASD fly controls later.
 - Why: Navigate terrain comfortably.
