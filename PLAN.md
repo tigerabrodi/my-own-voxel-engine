@@ -61,7 +61,7 @@ Assumptions
   - If normals omitted, call `geometry.computeVertexNormals()`.
   - After writing attributes, compute bounds: `geometry.computeBoundingSphere()` (and `computeBoundingBox()` if needed).
 
-5. Marching Cubes integration (CPU)
+5. Marching Cubes integration (CPU) ✅
 
 - What: Implement/port MC tables; write `polygonize(densityField, isoLevel)` producing triangle soup; compute vertex normals via gradient or cross products; return `BufferGeometry`.
 - Why: Smooth surface extraction from scalar fields; foundation for terrain.

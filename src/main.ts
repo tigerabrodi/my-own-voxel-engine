@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { marchingCubes } from "./mc/mesher";
 import { buildNaiveCubesGeometry } from "./voxel/mesher";
 import { VoxelVolume } from "./voxel/volume";
 
@@ -68,6 +69,26 @@ const mat = new THREE.MeshStandardMaterial({
 const mesh = new THREE.Mesh(geom, mat);
 mesh.position.set(-4, 0, -4);
 scene.add(mesh);
+
+// Marching Cubes demo: sphere SDF centered in a 24^3 volume
+const dims = { x: 24, y: 24, z: 24 };
+const center = new THREE.Vector3(dims.x * 0.5, dims.y * 0.5, dims.z * 0.5);
+const radius = 8;
+const sphereSDF = (x: number, y: number, z: number) => {
+  const dx = x - center.x;
+  const dy = y - center.y;
+  const dz = z - center.z;
+  return Math.sqrt(dx * dx + dy * dy + dz * dz) - radius;
+};
+const mcGeom = marchingCubes(dims, sphereSDF, 0);
+const mcMat = new THREE.MeshStandardMaterial({
+  color: 0x88ffd0,
+  metalness: 0,
+  roughness: 0.8,
+});
+const mcMesh = new THREE.Mesh(mcGeom, mcMat);
+mcMesh.position.set(-12, 0, -12);
+scene.add(mcMesh);
 
 function animate(): void {
   requestAnimationFrame(animate);
