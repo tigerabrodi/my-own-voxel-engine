@@ -107,7 +107,7 @@ Assumptions
   - Visual: Adding multiple chunk groups places meshes on a grid.
   - Logs: Scene child count equals number of active chunks.
 
-9. Terrain generation (heightfield SDF → density field)
+9. Terrain generation (heightfield SDF → density field) ✅
 
 - What: Implement 2D noise-based height function H(x,z). Density(y) = y − H(x,z). Fill chunk density fields then run MC.
 - Why: Produce coherent outdoor terrain quickly.

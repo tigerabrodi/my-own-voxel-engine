@@ -10,6 +10,7 @@ import {
   worldToChunk,
   worldToLocal,
 } from "./world/coords";
+import { heightSDF } from "./world/terrain";
 
 const canvas = document.getElementById("glcanvas") as HTMLCanvasElement | null;
 
@@ -85,31 +86,41 @@ const mesh = new THREE.Mesh(geom, mat);
 mesh.position.set(-4, 0, -4);
 scene.add(mesh);
 
-// Marching Cubes demo: sphere SDF centered in a 24^3 volume
-const dims = { x: 24, y: 24, z: 24 };
-const center = new THREE.Vector3(dims.x * 0.5, dims.y * 0.5, dims.z * 0.5);
-const radius = 8;
-const sphereSDF = (x: number, y: number, z: number) => {
-  const dx = x - center.x;
-  const dy = y - center.y;
-  const dz = z - center.z;
-  return Math.sqrt(dx * dx + dy * dy + dz * dz) - radius;
-};
-const mcGeom = marchingCubes(dims, sphereSDF, 0);
-const mcMat = new THREE.MeshStandardMaterial({
-  color: 0x88ffd0,
-  metalness: 0,
-  roughness: 0.8,
-});
-const mcMesh = new THREE.Mesh(mcGeom, mcMat);
+// Terrain via Marching Cubes per chunk (two chunks demo)
+const dims = { x: CHUNK_SIZE, y: CHUNK_SIZE, z: CHUNK_SIZE };
+const terrainParams = { scale: 0.08, amplitude: 6, offset: 6 };
+
+function buildChunkMC(cx: number, cy: number, cz: number): THREE.Mesh {
+  const [ox, oy, oz] = [cx * CHUNK_SIZE, cy * CHUNK_SIZE, cz * CHUNK_SIZE];
+  const density = (x: number, y: number, z: number) =>
+    heightSDF(ox + x, oy + y, oz + z, terrainParams);
+  const t0 = performance.now();
+  const geom = marchingCubes(dims, density, 0);
+  const ms = (performance.now() - t0).toFixed(2);
+  console.log(
+    "chunk gen:",
+    cx,
+    cy,
+    cz,
+    "tris",
+    (geom.getAttribute("position").count / 3) | 0,
+    "time(ms)",
+    ms
+  );
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0x88ffd0,
+    metalness: 0,
+    roughness: 0.8,
+  });
+  return new THREE.Mesh(geom, mat);
+}
+
 const groupA = createChunkGroup(-1, 0, -1);
-groupA.add(mcMesh);
+groupA.add(buildChunkMC(-1, 0, -1));
 scene.add(groupA);
 
-// Add a second chunk to demonstrate spacing
-const mcMeshB = new THREE.Mesh(mcGeom.clone(), mcMat.clone());
 const groupB = createChunkGroup(0, 0, -1);
-groupB.add(mcMeshB);
+groupB.add(buildChunkMC(0, 0, -1));
 scene.add(groupB);
 
 // Chunk coord sanity logs
