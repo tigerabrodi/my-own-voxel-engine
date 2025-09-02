@@ -158,7 +158,8 @@ for (const s of samples) {
 const keys = new Set<string>();
 window.addEventListener("keydown", (e) => keys.add(e.key.toLowerCase()));
 window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
-const moveSpeed = 8; // units per second
+const baseSpeed = 14; // units per second (increase from 8)
+const sprintMultiplier = 2.5; // hold Shift to sprint
 const tmpForward = new THREE.Vector3();
 const tmpRight = new THREE.Vector3();
 const tmpMove = new THREE.Vector3();
@@ -180,7 +181,8 @@ function animate(): void {
   if (keys.has("q")) tmpMove.sub(camera.up);
 
   if (tmpMove.lengthSq() > 0) {
-    tmpMove.normalize().multiplyScalar(moveSpeed * dt);
+    const speed = keys.has("shift") ? baseSpeed * sprintMultiplier : baseSpeed;
+    tmpMove.normalize().multiplyScalar(speed * dt);
     camera.position.add(tmpMove);
     // Keep OrbitControls target in sync when not in FPS mode
     if (!fpControls.isLocked) controls.target.add(tmpMove);
