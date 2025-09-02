@@ -99,7 +99,7 @@ Assumptions
 - Test:
   - Logs: For a few sample world coords, print computed chunk keys and locals; verify round-trips.
 
-8. Chunk container objects in Three.js
+8. Chunk container objects in Three.js ✅
 
 - What: Represent each chunk as a `THREE.Group` containing a single MC mesh. Position the group by chunk origin.
 - Why: Simple lifetime management; easy add/remove.

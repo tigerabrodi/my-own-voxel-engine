@@ -3,6 +3,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { marchingCubes } from "./mc/mesher";
 import { buildNaiveCubesGeometry } from "./voxel/mesher";
 import { VoxelVolume } from "./voxel/volume";
+import { createChunkGroup } from "./world/chunk";
 import {
   CHUNK_SIZE,
   chunkKey,
@@ -101,8 +102,15 @@ const mcMat = new THREE.MeshStandardMaterial({
   roughness: 0.8,
 });
 const mcMesh = new THREE.Mesh(mcGeom, mcMat);
-mcMesh.position.set(-12, 0, -12);
-scene.add(mcMesh);
+const groupA = createChunkGroup(-1, 0, -1);
+groupA.add(mcMesh);
+scene.add(groupA);
+
+// Add a second chunk to demonstrate spacing
+const mcMeshB = new THREE.Mesh(mcGeom.clone(), mcMat.clone());
+const groupB = createChunkGroup(0, 0, -1);
+groupB.add(mcMeshB);
+scene.add(groupB);
 
 // Chunk coord sanity logs
 const samples: Array<[number, number, number]> = [
