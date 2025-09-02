@@ -123,7 +123,7 @@ Assumptions
   - Visual: Camera navigation smooth; no control conflicts.
   - Logs: Current camera position printed on key press for debugging.
 
-11. Materials and lighting polish
+11. Materials and lighting polish ✅
 
 - What: Configure `DirectionalLight` with shadow map off initially; tweak material color and roughness; add ambient.
 - Why: Readable surface without the cost/complexity of shadows.

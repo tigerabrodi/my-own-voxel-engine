@@ -49,11 +49,12 @@ fpControls.addEventListener("lock", () => console.log("pointer: locked"));
 fpControls.addEventListener("unlock", () => console.log("pointer: unlocked"));
 
 // Lights
-const ambient = new THREE.AmbientLight(0xffffff, 0.25);
+const ambient = new THREE.AmbientLight(0x9fb3ff, 0.22); // subtle cool ambient
 scene.add(ambient);
 
-const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+const dirLight = new THREE.DirectionalLight(0xfff3d6, 1.0); // slightly warm key light
 dirLight.position.set(5, 10, 4);
+dirLight.castShadow = false; // keep shadows off for now per plan
 scene.add(dirLight);
 
 // Helpers
@@ -86,9 +87,9 @@ console.log("voxel: sample", volume.getVoxel(2, 2, 2));
 
 const geom = buildNaiveCubesGeometry(volume, (v) => v > 0);
 const mat = new THREE.MeshStandardMaterial({
-  color: 0x88a0ff,
+  color: 0x6f83ff,
   metalness: 0,
-  roughness: 0.9,
+  roughness: 0.88,
 });
 const mesh = new THREE.Mesh(geom, mat);
 mesh.position.set(-4, 0, -4);
@@ -96,7 +97,10 @@ scene.add(mesh);
 
 // Terrain via Marching Cubes per chunk (two chunks demo)
 const dims = { x: CHUNK_SIZE, y: CHUNK_SIZE, z: CHUNK_SIZE };
-const terrainParams = { scale: 0.08, amplitude: 6, offset: 6 };
+const terrainParams = { scale: 0.07, amplitude: 10, offset: 4 };
+
+// Keep references to terrain materials for live tweaks
+const terrainMaterials: THREE.MeshStandardMaterial[] = [];
 
 function buildChunkMC(cx: number, cy: number, cz: number): THREE.Mesh {
   const [ox, oy, oz] = [cx * CHUNK_SIZE, cy * CHUNK_SIZE, cz * CHUNK_SIZE];
@@ -116,10 +120,11 @@ function buildChunkMC(cx: number, cy: number, cz: number): THREE.Mesh {
     ms
   );
   const mat = new THREE.MeshStandardMaterial({
-    color: 0x88ffd0,
+    color: 0x8be4c6,
     metalness: 0,
-    roughness: 0.8,
+    roughness: 0.82,
   });
+  terrainMaterials.push(mat);
   return new THREE.Mesh(geom, mat);
 }
 
@@ -164,6 +169,20 @@ const tmpForward = new THREE.Vector3();
 const tmpRight = new THREE.Vector3();
 const tmpMove = new THREE.Vector3();
 
+// Material/lighting tweak helpers
+function applyRoughness(delta: number) {
+  for (const m of terrainMaterials) {
+    m.roughness = THREE.MathUtils.clamp(m.roughness + delta, 0, 1);
+    m.needsUpdate = true;
+  }
+  mat.roughness = THREE.MathUtils.clamp(mat.roughness + delta, 0, 1);
+  mat.needsUpdate = true;
+  console.log("mat roughness:", {
+    ui: mat.roughness,
+    terrain: terrainMaterials[0]?.roughness,
+  });
+}
+
 function animate(): void {
   requestAnimationFrame(animate);
   const dt = clock.getDelta();
@@ -194,3 +213,6 @@ function animate(): void {
 
 animate();
 console.log("Hello World");
+
+// Expose a simple material tweak in dev console (optional)
+(window as any).applyRoughness = applyRoughness;
