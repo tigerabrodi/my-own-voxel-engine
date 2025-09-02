@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { marchingCubes } from "./mc/mesher";
 import { buildNaiveCubesGeometry } from "./voxel/mesher";
 import { VoxelVolume } from "./voxel/volume";
@@ -23,10 +24,16 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   1000
 );
-camera.position.set(0, 2, 5);
+camera.position.set(0, 4, 12);
+
+// Orbit controls
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.target.set(-8, 2, -8);
 
 // Lights
-const ambient = new THREE.AmbientLight(0xffffff, 0.2);
+const ambient = new THREE.AmbientLight(0xffffff, 0.25);
 scene.add(ambient);
 
 const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
@@ -37,7 +44,7 @@ scene.add(dirLight);
 const axes = new THREE.AxesHelper(1.5);
 scene.add(axes);
 
-const grid = new THREE.GridHelper(10, 10);
+const grid = new THREE.GridHelper(20, 20);
 scene.add(grid);
 
 window.addEventListener("resize", () => {
@@ -92,6 +99,7 @@ scene.add(mcMesh);
 
 function animate(): void {
   requestAnimationFrame(animate);
+  controls.update();
   renderer.render(scene, camera);
 }
 

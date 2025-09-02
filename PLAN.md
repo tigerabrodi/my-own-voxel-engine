@@ -76,7 +76,7 @@ Assumptions
   - If generating positions only, run `geometry.computeVertexNormals()`.
   - Optional cleanup: merge nearly-duplicate vertices for better normals using `BufferGeometryUtils.mergeVertices` (if imported).
 
-6. Basic material & camera controls
+6. Basic material & camera controls ✅
 
 - What: Use `THREE.MeshStandardMaterial` (color, metalness=0, roughness≈0.9). Add `OrbitControls` for quick inspection.
 - Why: Lighting verifies normals; controls speed up iteration.
