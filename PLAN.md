@@ -92,7 +92,7 @@ Assumptions
 
 ### Phase 2 — First Voxel Engine Core
 
-7. Chunk definition and coordinate system
+7. Chunk definition and coordinate system ✅
 
 - What: Define constants `CHUNK_SIZE`, chunk world size = `CHUNK_SIZE` units; implement helpers to map world position → chunk key + local coord; store chunks in `Map` keyed by `x,y,z`.
 - Why: Organize world into manageable regions.

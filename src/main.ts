@@ -3,6 +3,12 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { marchingCubes } from "./mc/mesher";
 import { buildNaiveCubesGeometry } from "./voxel/mesher";
 import { VoxelVolume } from "./voxel/volume";
+import {
+  CHUNK_SIZE,
+  chunkKey,
+  worldToChunk,
+  worldToLocal,
+} from "./world/coords";
 
 const canvas = document.getElementById("glcanvas") as HTMLCanvasElement | null;
 
@@ -54,6 +60,7 @@ window.addEventListener("resize", () => {
 });
 
 console.log("boot: three baseline ok");
+console.log("chunk: CHUNK_SIZE", CHUNK_SIZE);
 
 // Voxel sanity + naive cubes mesh
 const volume = new VoxelVolume(8, 8, 8, 0);
@@ -96,6 +103,29 @@ const mcMat = new THREE.MeshStandardMaterial({
 const mcMesh = new THREE.Mesh(mcGeom, mcMat);
 mcMesh.position.set(-12, 0, -12);
 scene.add(mcMesh);
+
+// Chunk coord sanity logs
+const samples: Array<[number, number, number]> = [
+  [0, 0, 0],
+  [15, 0, 15],
+  [16, 0, 16],
+  [-1, 0, -1],
+  [-17, 0, 2],
+];
+for (const s of samples) {
+  const [cx, cy, cz] = worldToChunk(s[0], s[1], s[2]);
+  const local = worldToLocal(s[0], s[1], s[2]);
+  console.log(
+    "chunk: world",
+    s,
+    "→ chunk",
+    [cx, cy, cz],
+    "key",
+    chunkKey(cx, cy, cz),
+    "local",
+    local
+  );
+}
 
 function animate(): void {
   requestAnimationFrame(animate);
