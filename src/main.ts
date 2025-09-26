@@ -45,8 +45,26 @@ controls.target.set(-8, 2, -8);
 // Pointer-lock FPS look
 const fpControls = new PointerLockControls(camera, renderer.domElement);
 renderer.domElement.addEventListener("click", () => fpControls.lock());
-fpControls.addEventListener("lock", () => console.log("pointer: locked"));
-fpControls.addEventListener("unlock", () => console.log("pointer: unlocked"));
+fpControls.addEventListener("lock", () => {
+  controls.enabled = false;
+  console.log("pointer: locked");
+});
+fpControls.addEventListener("unlock", () => {
+  controls.enabled = true;
+  console.log("pointer: unlocked");
+});
+
+// Prevent OrbitControls from handling pointerdown while pointer is locked
+renderer.domElement.addEventListener(
+  "pointerdown",
+  (e) => {
+    if (fpControls.isLocked) {
+      e.stopImmediatePropagation();
+      e.preventDefault();
+    }
+  },
+  true
+);
 
 // Lights
 const ambient = new THREE.AmbientLight(0x9fb3ff, 0.22); // subtle cool ambient
